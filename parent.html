@@ -8,7 +8,7 @@
   <style>
     body { margin: 0; padding: 0; }
     #map { height: 100vh; width: 100%; }
-    #info { position: absolute; top: 10px; left: 10px; z-index: 1000; background: white; padding: 10px; border-radius: 5px; }
+    #info { position: absolute; top: 10px; left: 10px; z-index: 1000; background: white; padding: 10px; border-radius: 5px; box-shadow: 0 0 5px rgba(0,0,0,0.3); }
   </style>
 </head>
 <body>
@@ -16,7 +16,7 @@
   <div id="map"></div>
 
   <script>
-    const supabase = window.supabase.createClient(
+    const sb = window.supabase.createClient(
       'https://naesyzhoiwwvpfgxsfqt.supabase.co',
       'sb_publishable_uGPlvXMtG6ERI9HzJOgzlw_vrRkUfft'
     );
@@ -28,41 +28,48 @@
 
     let busMarker = null;
 
-    async function loadInitialLocation() {
-      const { data } = await supabase
+    function updateMarker(lat, lng, time) {
+      if (!busMarker) {
+        busMarker = L.marker([lat, lng]).addTo(map)
+          .bindPopup('Bus')
+          .openPopup();
+        map.setView([lat, lng], 15);
+      } else {
+        busMarker.setLatLng([lat, lng]);
+      }
+      const t = time ? new Date(time).toLocaleTimeString() : 'just now';
+      document.getElementById('info').innerText = `Last update: ${t}`;
+    }
+
+    // Load any existing location first
+    async function loadInitial() {
+      const { data, error } = await sb
         .from('locations')
         .select('*')
         .eq('bus_id', 'bus_01')
         .maybeSingle();
 
-      if (data) updateMarker(data.lat, data.lng, data.updated_at);
-    }
-
-    function updateMarker(lat, lng, time) {
-      if (!busMarker) {
-        busMarker = L.marker([lat, lng]).addTo(map);
-        map.setView([lat, lng], 15);
-      } else {
-        busMarker.setLatLng([lat, lng]);
+      if (data) {
+        updateMarker(data.lat, data.lng, data.updated_at);
+      } else if (error) {
+        console.error(error);
       }
-      document.getElementById('info').innerText = 
-        `Last update: ${new Date(time).toLocaleTimeString()}`;
     }
 
-    supabase
-      .channel('locations-changes')
+    // Realtime updates
+    sb.channel('locations-changes')
       .on('postgres_changes', 
-        { event: '*', schema: 'public', table: 'locations' }, 
+        { event: '*', schema: 'public', table: 'locations', filter: 'bus_id=eq.bus_01' }, 
         (payload) => {
           const loc = payload.new;
-          if (loc && loc.bus_id === 'bus_01') {
+          if (loc) {
             updateMarker(loc.lat, loc.lng, loc.updated_at);
           }
         }
       )
       .subscribe();
 
-    loadInitialLocation();
+    loadInitial();
   </script>
 </body>
 </html>
