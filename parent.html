@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Track the Bus</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    body { margin: 0; padding: 0; }
+    #map { height: 100vh; width: 100%; }
+    #info { position: absolute; top: 10px; left: 10px; z-index: 1000; background: white; padding: 10px; border-radius: 5px; }
+  </style>
+</head>
+<body>
+  <div id="info">Waiting for bus location...</div>
+  <div id="map"></div>
+
+  <script>
+    const supabase = window.supabase.createClient(
+      'https://naesyzhoiwwvpfgxsfqt.supabase.co',
+      'sb_publishable_uGPlvXMtG6ERI9HzJOgzlw_vrRkUfft'
+    );
+
+    const map = L.map('map').setView([42.1, -72.6], 13);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '© OpenStreetMap'
+    }).addTo(map);
+
+    let busMarker = null;
+
+    async function loadInitialLocation() {
+      const { data } = await supabase
+        .from('locations')
+        .select('*')
+        .eq('bus_id', 'bus_01')
+        .maybeSingle();
+
+      if (data) updateMarker(data.lat, data.lng, data.updated_at);
+    }
+
+    function updateMarker(lat, lng, time) {
+      if (!busMarker) {
+        busMarker = L.marker([lat, lng]).addTo(map);
+        map.setView([lat, lng], 15);
+      } else {
+        busMarker.setLatLng([lat, lng]);
+      }
+      document.getElementById('info').innerText = 
+        `Last update: ${new Date(time).toLocaleTimeString()}`;
+    }
+
+    supabase
+      .channel('locations-changes')
+      .on('postgres_changes', 
+        { event: '*', schema: 'public', table: 'locations' }, 
+        (payload) => {
+          const loc = payload.new;
+          if (loc && loc.bus_id === 'bus_01') {
+            updateMarker(loc.lat, loc.lng, loc.updated_at);
+          }
+        }
+      )
+      .subscribe();
+
+    loadInitialLocation();
+  </script>
+</body>
+</html>
