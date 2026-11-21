@@ -16,7 +16,7 @@
   <div id="status">Ready</div>
 
   <script>
-    const supabase = window.supabase.createClient(
+    const sb = window.supabase.createClient(
       'https://naesyzhoiwwvpfgxsfqt.supabase.co',
       'sb_publishable_uGPlvXMtG6ERI9HzJOgzlw_vrRkUfft'
     );
@@ -29,7 +29,7 @@
       document.getElementById('status').innerText = 'Getting location...';
 
       if (!navigator.geolocation) {
-        alert('Geolocation is not supported');
+        alert('Geolocation is not supported by this browser');
         return;
       }
 
@@ -38,7 +38,7 @@
           const lat = pos.coords.latitude;
           const lng = pos.coords.longitude;
 
-          const { error } = await supabase
+          const { error } = await sb
             .from('locations')
             .upsert({
               bus_id: 'bus_01',
